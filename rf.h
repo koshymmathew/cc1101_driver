@@ -12,10 +12,12 @@
 //#include <Arduino.h>
 //#include <stddef.h>
 //#include <avr/pgmspace.h>
-struct PACKET {
-	char length;
-	char data[32];
-	char rssi;
+struct FLASH{
+  unsigned char txbuffer[20];
+  unsigned int done;
+  unsigned int crc;
+  unsigned int src;
+  long ID;
 };
 
 struct WAKENODE{
@@ -24,12 +26,12 @@ struct WAKENODE{
 };
 
 struct SENSOR{
-  unsigned int region0;
-  unsigned int region1;
-  unsigned int region2;
-  unsigned int region3;
-  unsigned int region4;
-  unsigned int temperature;
+  unsigned int val_0;
+  unsigned int val_1;
+  unsigned int val_2;
+  unsigned int val_3;
+  unsigned int val_4;
+  unsigned int val_5;
 };
 
 
@@ -43,8 +45,8 @@ struct HEADER{
 
 extern struct HEADER reply;
 extern struct HEADER header;
-extern struct PACKET rx_packet;
 extern struct WAKENODE wake;
+extern struct FLASH flash;
 
 // Configuration Registers
 #define CC1101_IOCFG2       0x00        // GDO2 output pin configuration
@@ -194,3 +196,4 @@ void packet_end_seen_ISR(void);
 
 char rf_receive_packet(void);
 char rf_send_packet(char *buffer, char size);
+char rf_wait_flash(char retries);

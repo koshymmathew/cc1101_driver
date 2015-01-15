@@ -34,8 +34,8 @@
 
 struct HEADER reply;
 struct HEADER header;
-struct PACKET rx_packet;
 struct WAKENODE wake;
+struct FLASH flash;
 volatile unsigned int packet_recv_flag=0; //flag indicating if a packet has been recieved
 
 
@@ -436,12 +436,12 @@ char rf_wait(char retries) {
 			Serial.print("SRC ");Serial.println(reply.src);
 			Serial.print("flashRequest ");Serial.println(reply.flashRequest);
 			Serial.print("eraseRequest ");Serial.println(reply.eraseRequest);	
-			Serial.print("temp ");Serial.println(reply.sensor.temperature);
-			Serial.print("Region 0 = ");Serial.println(reply.sensor.region0);	
-			Serial.print("Region 1 = ");Serial.println(reply.sensor.region1);	
-			Serial.print("Region 2 = ");Serial.println(reply.sensor.region2);	
-			Serial.print("Region 3 = ");Serial.println(reply.sensor.region3);		
-			Serial.print("Region 4 = ");Serial.println(reply.sensor.region4);
+			Serial.print("temp ");Serial.println(reply.sensor.val_5);
+			Serial.print("Region 0 = ");Serial.println(reply.sensor.val_0);	
+			Serial.print("Region 1 = ");Serial.println(reply.sensor.val_1);	
+			Serial.print("Region 2 = ");Serial.println(reply.sensor.val_2);	
+			Serial.print("Region 3 = ");Serial.println(reply.sensor.val_3);		
+			Serial.print("Region 4 = ");Serial.println(reply.sensor.val_4);
 			
 			Serial.println("\n");	
 			
@@ -482,7 +482,84 @@ char rf_wait(char retries) {
 	 
 	//return(ackFlag); 
 }
+// Get Ack from relay or timeout
+char rf_wait_flash(char retries) {
+	rf_start_listening();
 
+	//Serial.println("waiting for DATA \n");
+	char response=0;
+	char reply_success=0;
+	char reply_tx_success=0;
+	packet_recv_flag =0; //reset the flag because this is set on TX first 
+	
+	do{
+		int i=0;
+		while(i<500) {
+			if(response=rf_available()) break;
+			i = i+1;
+			delay(1);
+		}
+	//Serial.print("retries %u \n", retries);
+	retries--;	
+	}
+	while(retries>0 && !response);
+	
+	if(response){
+		//packet_recv_flag =0; //reset the flag 	
+		
+		reply_success = rf_read(&flash,sizeof(flash));
+		//rf_receive();
+		if(reply_success){
+			Serial.println("Got a flash payload \n");
+			Serial.print("ID ");Serial.println(flash.ID,HEX);
+			Serial.print("SRC ");Serial.println(flash.src);
+			Serial.print("FLASH Done  ");Serial.println(flash.done);
+			Serial.print("FLASH crc (not impelemented)");Serial.println(flash.crc);	
+	    	for(int j=0;j<5;j++)
+    		{
+		      Serial.print(flash.txbuffer[j]);
+		      Serial.print(",");
+			}
+			Serial.println("\n");	
+			
+			//reply.src =0; //base 
+			delay(20); //works 50% with this delay
+			reply_tx_success = rf_write(&flash,sizeof(flash));	 //if we get a payload send the mesasge back to confirm ACK
+			//delay(40); //works 50% with this delay
+
+			
+			if(reply_tx_success)
+			{
+				Serial.print("REPLY for ACK success ");Serial.println(reply_tx_success);	
+				return 1;
+			}
+			else
+			{
+				return 0;
+			}
+		
+		}
+		else{
+			Serial.println(" rf_read() failed \n");
+			rf_spi_strobe(CC1101_SIDLE); 
+			rf_spi_strobe(CC1101_SFRX);
+			delay(100);
+			//rf_start_listening();
+			return 0;
+			
+		}
+		
+	}
+	else 
+	{
+		//rf_nak(myID);
+		Serial.println(" there was no RF transmission from node \n");
+		return 0;
+		
+	}
+	 
+	//return(ackFlag); 
+}
 char rf_check_receive(void){
 	
 	
@@ -504,12 +581,12 @@ char rf_check_receive(void){
 			Serial.print("SRC %u \n");Serial.println(reply.src);
 			Serial.print("flashRequest %u \n");Serial.println(reply.flashRequest);
 			Serial.print("eraseRequest %u \n");Serial.println(reply.eraseRequest);	
-			Serial.print("temp %u \n");Serial.println(reply.sensor.temperature);
-			Serial.print("Region 0 = %u \n");Serial.println(reply.sensor.region0);	
-			Serial.print("Region 1 = %u \n");Serial.println(reply.sensor.region1);	
-			Serial.print("Region 2 = %u \n");Serial.println(reply.sensor.region2);	
-			Serial.print("Region 3 = %u \n");Serial.println(reply.sensor.region3);		
-			Serial.print("Region 4 = %u \n");Serial.println(reply.sensor.region4);
+			Serial.print("temp %u \n");Serial.println(reply.sensor.val_5);
+			Serial.print("Region 0 = %u \n");Serial.println(reply.sensor.val_0);	
+			Serial.print("Region 1 = %u \n");Serial.println(reply.sensor.val_1);	
+			Serial.print("Region 2 = %u \n");Serial.println(reply.sensor.val_2);	
+			Serial.print("Region 3 = %u \n");Serial.println(reply.sensor.val_3);		
+			Serial.print("Region 4 = %u \n");Serial.println(reply.sensor.val_4);
 			Serial.print("\n");	
 		
 			reply_tx_success = rf_write(&reply,sizeof(reply));	 //if we get a payload send the mesasge back to confirm ACK
@@ -559,29 +636,29 @@ char rf_xmit(long myID) {
 	header.eraseRequest =45;
 	header.flashRequest =56;
 	
-	header.sensor.temperature = 1229;//temp_read();
-	header.sensor.region0 = 1230;
-	header.sensor.region1 = 1231;
-	header.sensor.region2 = 1232;
-	header.sensor.region3 = 1233;
-	header.sensor.region4 = 1234;
+	header.sensor.val_5 = 1229;//temp_read();
+	header.sensor.val_0 = 1230;
+	header.sensor.val_1 = 1231;
+	header.sensor.val_2 = 1232;
+	header.sensor.val_3 = 1233;
+	header.sensor.val_4 = 1234;
 	
 	
 	Serial.print("ID %04X \n");Serial.println(reply.ID);
 	Serial.print("SRC %u \n");Serial.println(reply.src);
 	Serial.print("flashRequest %u \n");Serial.println(reply.flashRequest);
 	Serial.print("eraseRequest %u \n");Serial.println(reply.eraseRequest);	
-	Serial.print("temp %u \n");Serial.println(reply.sensor.temperature);
-	Serial.print("Region 0 = %u \n");Serial.println(reply.sensor.region0);	
-	Serial.print("Region 1 = %u \n");Serial.println(reply.sensor.region1);	
-	Serial.print("Region 2 = %u \n");Serial.println(reply.sensor.region2);	
-	Serial.print("Region 3 = %u \n");Serial.println(reply.sensor.region3);		
-	Serial.print("Region 4 = %u \n");Serial.println(reply.sensor.region4);
+	Serial.print("temp %u \n");Serial.println(reply.sensor.val_5);
+	Serial.print("Region 0 = %u \n");Serial.println(reply.sensor.val_0);	
+	Serial.print("Region 1 = %u \n");Serial.println(reply.sensor.val_1);	
+	Serial.print("Region 2 = %u \n");Serial.println(reply.sensor.val_2);	
+	Serial.print("Region 3 = %u \n");Serial.println(reply.sensor.val_3);		
+	Serial.print("Region 4 = %u \n");Serial.println(reply.sensor.val_4);
 
 	Serial.println("\n");
 
 	// output readings
-	//Serial.print("Raw Temperature: %u\n",header.sensor.temperature);
+	//Serial.print("Raw Temperature: %u\n",header.sensor.val_5);
 	
 	Serial.print("the size of struct is %u\n");Serial.println(sizeof(header));
 	
