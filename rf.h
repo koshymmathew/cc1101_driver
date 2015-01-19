@@ -34,6 +34,14 @@ struct SENSOR{
   unsigned int val_5;
 };
 
+struct DATETIME{
+  unsigned char year;
+  unsigned char month;
+  unsigned char day;
+  unsigned char hour;
+  unsigned char min;
+  unsigned char sec;
+};
 
 struct HEADER{
   long ID;
@@ -41,6 +49,7 @@ struct HEADER{
   unsigned int  flashRequest;
   unsigned int  eraseRequest;
   struct SENSOR sensor;
+  struct DATETIME datetime;
 };
 
 extern struct HEADER reply;

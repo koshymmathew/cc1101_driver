@@ -436,13 +436,18 @@ char rf_wait(char retries) {
 			Serial.print("SRC ");Serial.println(reply.src);
 			Serial.print("flashRequest ");Serial.println(reply.flashRequest);
 			Serial.print("eraseRequest ");Serial.println(reply.eraseRequest);	
-			Serial.print("temp ");Serial.println(reply.sensor.val_5);
-			Serial.print("Region 0 = ");Serial.println(reply.sensor.val_0);	
-			Serial.print("Region 1 = ");Serial.println(reply.sensor.val_1);	
+			Serial.print("Temperature ");Serial.println(reply.sensor.val_5);
+			Serial.print("Humidity = ");Serial.println(reply.sensor.val_0);	
+			Serial.print("Soil M= ");Serial.println(reply.sensor.val_1);	
 			Serial.print("Region 2 = ");Serial.println(reply.sensor.val_2);	
 			Serial.print("Region 3 = ");Serial.println(reply.sensor.val_3);		
 			Serial.print("Region 4 = ");Serial.println(reply.sensor.val_4);
-			
+			Serial.print("YEAR = ");Serial.println(reply.datetime.year);	
+			Serial.print("Month = ");Serial.println(reply.datetime.month);	
+			Serial.print("Day = ");Serial.println(reply.datetime.day);	
+			Serial.print("Hour = ");Serial.println(reply.datetime.hour);		
+			Serial.print("Minutes = ");Serial.println(reply.datetime.min);
+			Serial.print("Seconds = ");Serial.println(reply.datetime.sec);			
 			Serial.println("\n");	
 			
 			//reply.src =0; //base 
@@ -510,17 +515,17 @@ char rf_wait_flash(char retries) {
 		reply_success = rf_read(&flash,sizeof(flash));
 		//rf_receive();
 		if(reply_success){
-			Serial.println("Got a flash payload \n");
+			//Serial.println("Got a flash payload \n");
 			Serial.print("ID ");Serial.println(flash.ID,HEX);
 			Serial.print("SRC ");Serial.println(flash.src);
-			Serial.print("FLASH Done  ");Serial.println(flash.done);
-			Serial.print("FLASH crc (not impelemented)");Serial.println(flash.crc);	
-	    	for(int j=0;j<5;j++)
-    		{
-		      Serial.print(flash.txbuffer[j]);
-		      Serial.print(",");
-			}
-			Serial.println("\n");	
+			//Serial.print("FLASH Done  ");Serial.println(flash.done);
+			Serial.print("FLASH crc  ");Serial.println(flash.crc);	
+	    	//for(int j=0;j<5;j++)
+    		//{
+		      //Serial.print(flash.txbuffer[j]);
+		      //Serial.print(",");
+			//}
+			//Serial.println("\n");	
 			
 			//reply.src =0; //base 
 			delay(20); //works 50% with this delay
