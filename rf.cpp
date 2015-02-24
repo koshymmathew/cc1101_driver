@@ -1,27 +1,34 @@
 #include "rf.h"
+//#include <SPI.h>
 //#include <msp430.h>
 //#include <stdio.h>
 //#include <stdint.h>
 //#include "bitop.h"
 //#include "config.h"
 //#include "clock.h"
-//pinMode(csn_pin,OUTPUT);
+//
 #define MAX_RETRIES 5
-#define csn_pin 53
-#define PORT_SPI_MISO  PINB
-#define BIT_SPI_MISO  3
-#define PORT_GDO0  PINE
-#define BIT_GDO0  4
+#define csn_pin PN_0 //PN_2 on launchpad 
+//#define PORT_SPI_MISO  PD
+//#define BIT_SPI_MISO  0
+//#define PORT_GDO0  PP //PF on launchpad
+//#define BIT_GDO0  0
+#define cc1101_gdo PP_0
+#define MISO_pin PD_0
+//#define test_bit(reg,bitNum) (((reg) & (1<<(bitNum)))!=0) 
+//#define test_miso(reg,bitNum) (GPIOPinRead(GPIO_PORTD_BASE,GPIO_PIN_0)!=0)
+//#define test_gdo(reg,bitNum) (GPIOPinRead(GPIO_PORTF_BASE,GPIO_PIN_1)!=0)
 
 #define select_rf() digitalWrite(csn_pin,LOW);//clear_bit(OUT(RF_CS_PORT),RF_CS)
 #define unselect_rf() digitalWrite(csn_pin,HIGH);
-#define wait_miso() ;//while(bitRead(PORT_SPI_MISO, BIT_SPI_MISO))
-#define wait_tx_sync() while(bitRead(PORT_GDO0, BIT_GDO0))
-#define wait_tx_done() while(!bitRead(PORT_GDO0, BIT_GDO0))
-#define wait_rx_sync() while(bitRead(PORT_GDO0, BIT_GDO0))
-#define wait_rx_done() while(!bitRead(PORT_GDO0, BIT_GDO0))
 
-#define rf_spi_send_receive SPI.transfer
+#define wait_miso()  while(digitalRead(MISO_pin)) //miso
+#define wait_tx_sync() while(digitalRead(cc1101_gdo)) //gdo
+#define wait_tx_done() while(!digitalRead(cc1101_gdo))
+#define wait_rx_sync() while(digitalRead(cc1101_gdo))
+#define wait_rx_done() while(!digitalRead(cc1101_gdo))
+
+#define rf_spi_send_receive mySPI.transfer
 
 
 #define FLASHDONE 77
@@ -31,6 +38,7 @@
 #define FLASH_SIZE 4000  //(20*FLASH_SIZE) bytes of flash data to send 
 #define DEVICEID 0x04
 
+SPIClass mySPI(2);
 
 struct HEADER reply;
 struct HEADER header;
@@ -58,7 +66,7 @@ char rf_settings_1_2kbps[0x30] = {
 	0x00, // FSCTRL0 Frequency Synthesizer Control
 	0x23, // FREQ2 Frequency Control Word, High Byte
 	0x31, // FREQ1 Frequency Control Word, Middle Byte
-	0x3B, // FREQ0 Frequency Control Word, Low Byte
+	0x33, // FREQ0 Frequency Control Word, Low Byte
 	0xF5, // MDMCFG4 Modem Configuration
 	0x83, // MDMCFG3 Modem Configuration
 	0x13, // MDMCFG2 Modem Configuration
@@ -159,7 +167,7 @@ void rf_write_settings_1_2kbps(void) {
 }
 
 // PATABLE (10 dBm output power)
-char paTable[] = {0x03}; //0x03 for lowest power 
+char paTable[] = {0xC0}; //0x03 for lowest power 
 char paTableLen = 1;
 
 void rf_spi_write_reg(char addr, char value) {
@@ -239,10 +247,12 @@ void rf_powerup_reset(void) {
 }
 
 void rf_init(char dataRate) {
-	SPI.begin();
-	SPI.setBitOrder(MSBFIRST);
-  	SPI.setDataMode(SPI_MODE0);
-  	SPI.setClockDivider(SPI_CLOCK_DIV4);
+	pinMode(csn_pin,OUTPUT);
+	pinMode(cc1101_gdo,INPUT);
+	mySPI.begin();
+	mySPI.setBitOrder(MSBFIRST);
+  	mySPI.setDataMode(SPI_MODE0);
+  	mySPI.setClockDivider(SPI_CLOCK_DIV64);
 	Serial.println("init RF ");
 	rf_powerup_reset();
 	if(dataRate==1){
@@ -259,7 +269,7 @@ void rf_init(char dataRate) {
 	
 }
 
-void rf_reconfigure(unsigned char int_on) {
+void rf_reconfigure(uint8_t int_on) {
 	
 	if(int_on) {
 		//rf_settings[1] = 0x06;	
@@ -301,13 +311,13 @@ char rf_write(const void* buf, int len)
 {
   //uint8_t status=0;
 
-	const unsigned char* current = (const unsigned char*)(buf);
+	const uint8_t* current = (const uint8_t*)(buf);
 
 	uint8_t data_len = min(len,32);
 	//uint8_t blank_len = dynamic_payloads_enabled ? 0 : 32 - data_len;
 	
-	//Serial.print("[Writing bytes] \n");
-	//Serial.println(data_len);
+	Serial.print("[Writing bytes] \n");
+	Serial.println(data_len);
 	
 	select_rf(); //******************HAVE TO SEND THE LENGHT FIRST ***********************
 	wait_miso();
@@ -331,13 +341,13 @@ char rf_write(const void* buf, int len)
 	//wait_miso(); // TODO because of the level shifter it dosent see this ???????
 	rf_spi_strobe(CC1101_STX);           
 
-	
+	Serial.println("waiting for gdo sync and done");
 	// wait for GDO1 to assert -- sync sent
-	wait_tx_sync();
+	wait_tx_sync(); 
 	// wait for GDO1 to deassert -- packet finished sending
 	wait_tx_done();
-	
-	Serial.println(" tx done  \n");
+	//delay(100);
+	//Serial.println(" tx done  \n");
 	return 1;	// success
 }
 
@@ -347,7 +357,7 @@ char rf_read(void* buf,int len) {
 	char pktLen;
 	char length=32;
 
-	unsigned char* current =  ( unsigned char*)(buf);
+	uint8_t* current =  ( uint8_t*)(buf);
 	
 	//Serial.println("receiving \n");
 
@@ -368,7 +378,7 @@ char rf_read(void* buf,int len) {
 			rf_spi_send_receive((CC1101_RXFIFO | CC1101_READ_BURST));// Send address
 			
 			//Serial.print("writing into memory address = %p\n", (void *)(&buf));
-			unsigned char spi_test;
+			uint8_t spi_test;
 			for( i = 0; i < pktLen; i++) {
 				
 				 spi_test= rf_spi_send_receive(0);
@@ -436,12 +446,13 @@ char rf_wait(char retries) {
 			Serial.print("SRC ");Serial.println(reply.src);
 			Serial.print("flashRequest ");Serial.println(reply.flashRequest);
 			Serial.print("eraseRequest ");Serial.println(reply.eraseRequest);	
-			Serial.print("Temperature ");Serial.println(reply.sensor.val_5);
-			Serial.print("Humidity = ");Serial.println(reply.sensor.val_0);	
-			Serial.print("Soil M= ");Serial.println(reply.sensor.val_1);	
-			Serial.print("Region 2 = ");Serial.println(reply.sensor.val_2);	
-			Serial.print("Region 3 = ");Serial.println(reply.sensor.val_3);		
-			Serial.print("Region 4 = ");Serial.println(reply.sensor.val_4);
+			Serial.print("Soil_temp ");Serial.println(reply.sensor.val_6);
+			Serial.print("moist_1 = ");Serial.println(reply.sensor.val_0);	
+			Serial.print("moist_2 = ");Serial.println(reply.sensor.val_1);	
+			Serial.print("moist_3 = ");Serial.println(reply.sensor.val_2);	
+			Serial.print("ec_1 = ");Serial.println(reply.sensor.val_3);		
+			Serial.print("ec_2 = ");Serial.println(reply.sensor.val_4);
+			Serial.print("ec_3 = ");Serial.println(reply.sensor.val_5);
 			Serial.print("YEAR = ");Serial.println(reply.datetime.year);	
 			Serial.print("Month = ");Serial.println(reply.datetime.month);	
 			Serial.print("Day = ");Serial.println(reply.datetime.day);	
@@ -491,7 +502,7 @@ char rf_wait(char retries) {
 char rf_wait_flash(char retries) {
 	rf_start_listening();
 
-	//Serial.println("waiting for DATA \n");
+	//Serial.println("waiting for FLASH DATA \n");
 	char response=0;
 	char reply_success=0;
 	char reply_tx_success=0;
@@ -504,31 +515,34 @@ char rf_wait_flash(char retries) {
 			i = i+1;
 			delay(1);
 		}
-	//Serial.print("retries %u \n", retries);
+	Serial.print( "retries");Serial.println(retries);
 	retries--;	
 	}
 	while(retries>0 && !response);
-	
+	//Serial.print("response is ");Serial.println(response);
 	if(response){
 		//packet_recv_flag =0; //reset the flag 	
-		
+		//Serial.print("READING FLASH is ");
 		reply_success = rf_read(&flash,sizeof(flash));
 		//rf_receive();
 		if(reply_success){
 			//Serial.println("Got a flash payload \n");
-			Serial.print("ID ");Serial.println(flash.ID,HEX);
+			
 			Serial.print("SRC ");Serial.println(flash.src);
 			//Serial.print("FLASH Done  ");Serial.println(flash.done);
-			Serial.print("FLASH crc  ");Serial.println(flash.crc);	
-	    	//for(int j=0;j<5;j++)
-    		//{
-		      //Serial.print(flash.txbuffer[j]);
-		      //Serial.print(",");
-			//}
-			//Serial.println("\n");	
+			Serial.print("FLASH crc  ");Serial.println(flash.crc,HEX);	
+	    	Serial.print("ID ");Serial.println(flash.ID,HEX);
+	    	Serial.print("ID ");Serial.println(flash.ID);
+	    	for(int j=0;j<20;j++)
+    		{
+		      Serial.print(flash.txbuffer[j]);
+		      Serial.print(",");
+			}
+			Serial.println("\n");	
 			
 			//reply.src =0; //base 
 			delay(20); //works 50% with this delay
+			//Serial.println("writing FLASH back ");
 			reply_tx_success = rf_write(&flash,sizeof(flash));	 //if we get a payload send the mesasge back to confirm ACK
 			//delay(40); //works 50% with this delay
 
@@ -728,12 +742,12 @@ char rf_wor_tx(char wake_node_num,char rf_command){
 	wake.node_num= wake_node_num;
 	wake.command = rf_command;
 	
-	Serial.print("waking node # ");Serial.print(wake_node_num);Serial.print("with command # "); Serial.println(rf_command);
+	Serial.print("waking node # ");Serial.print(wake.node_num);Serial.print("with command # "); Serial.println(wake.command);
 	tx_success = rf_write(&wake,sizeof(wake));
 	delay(100);
 	if(tx_success)
 	{
-		Serial.print("TX success ");Serial.println(tx_success);	
+		//Serial.print("TX success ");Serial.println(tx_success);	
 		return 1;
 	}
 	
@@ -749,12 +763,12 @@ char rf_wor_tx(char wake_node_num,char rf_command){
 void packet_end_seen_ISR(void)
 {
     // if GDO fired
-  if(!bitRead(PORT_GDO0, BIT_GDO0))
-   {
+  //if(!bitRead(PORT_GDO0, BIT_GDO0))
+  // {
     //Serial.print("Woken UP !! GDO interrupt fired \n"); //end of packet seen by WOR
 	
 	packet_recv_flag = 1; //packet has been received 
-	}
+	//}
 	  //Serial.print("clearing the interrupt flag \n");
 	  //clear_bit(IFG(RF_RX_GDO_PORT),RF_RX_GDO);   // P2.6 IFG cleared
 	//__bic_status_register_on_exit(LPM0_bits + GIE); //exit at full power.

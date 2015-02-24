@@ -7,17 +7,23 @@
  *  Harvest Robotics
  *
  */
-#include <cc1101_config.h>
-//#include <SPI.h>
-//#include <Arduino.h>
-//#include <stddef.h>
+
+#include <stdio.h>
+#include <Energia.h>
+#include <SPI.h>
+//#include <cc1101_config.h>
+
+#include <stddef.h>
 //#include <avr/pgmspace.h>
+
+
 struct FLASH{
-  unsigned char txbuffer[20];
-  unsigned int done;
-  unsigned int crc;
-  unsigned int src;
-  long ID;
+  uint8_t txbuffer[20];
+  uint16_t done;
+  uint16_t crc;
+  uint16_t src;
+  uint32_t ID;
+  
 };
 
 struct WAKENODE{
@@ -26,28 +32,29 @@ struct WAKENODE{
 };
 
 struct SENSOR{
-  unsigned int val_0;
-  unsigned int val_1;
-  unsigned int val_2;
-  unsigned int val_3;
-  unsigned int val_4;
-  unsigned int val_5;
+  uint16_t val_0;
+  uint16_t val_1;
+  uint16_t val_2;
+  uint16_t val_3;
+  uint16_t val_4;
+  uint16_t val_5;
+  uint16_t val_6;
 };
 
 struct DATETIME{
-  unsigned char year;
-  unsigned char month;
-  unsigned char day;
-  unsigned char hour;
-  unsigned char min;
-  unsigned char sec;
+  uint8_t year;
+  uint8_t month;
+  uint8_t day;
+  uint8_t hour;
+  uint8_t min;
+  uint8_t sec;
 };
 
 struct HEADER{
   long ID;
-  unsigned int  src;
-  unsigned int  flashRequest;
-  unsigned int  eraseRequest;
+  uint16_t  src;
+  uint16_t  flashRequest;
+  uint16_t  eraseRequest;
   struct SENSOR sensor;
   struct DATETIME datetime;
 };
@@ -159,11 +166,12 @@ extern struct FLASH flash;
 #define CC1101_TX_UNDERFLOW 22
 
 #define MAX_RETRIES 5
-#define csn_pin 53
-#define PORT_SPI_MISO  PINB
-#define BIT_SPI_MISO  3
-#define PORT_GDO0  PINE
-#define BIT_GDO0  4
+//#define csn_pin 53
+//#define PORT_SPI_MISO  PINB
+//#define BIT_SPI_MISO  3
+//#define PORT_GDO0  PINE
+//#define BIT_GDO0  4
+
 
 
 void rf_spi_write_reg(char addr, char value);
@@ -176,7 +184,7 @@ void rf_spi_powerup_reset(void);
 
 void rf_write_settings_250kbps(void);
 void rf_write_settings_1_2kbps(void);
-void rf_reconfigure(unsigned char int_on); 
+void rf_reconfigure(uint8_t int_on); 
 
 void rf_init(char);
 void rf_status(void);
